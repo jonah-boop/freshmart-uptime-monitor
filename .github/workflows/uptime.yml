@@ -1,0 +1,61 @@
+name: External Fresh Mart uptime monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: freshmart-uptime-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe endpoints with three-strike confirmation
+        id: probe
+        run: |
+          set -euo pipefail
+          python3 check_endpoints.py > results.json
+          healthy=$(python3 -c 'import json; print(str(json.load(open("results.json"))["healthy"]).lower())')
+          echo "healthy=$healthy" >> "$GITHUB_OUTPUT"
+          cat results.json
+      - name: Reconcile incident and send deduplicated Telegram notification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEALTHY: ${{ steps.probe.outputs.healthy }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          gh label create uptime-incident --color D73A4A --description 'Active Fresh Mart availability incident' --force >/dev/null
+          issue=$(gh issue list --repo "$GITHUB_REPOSITORY" --label uptime-incident --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ "$HEALTHY" = "false" ]; then
+            if [ -z "$issue" ]; then
+              {
+                echo 'The external monitor confirmed three consecutive failed probes.'
+                echo
+                echo '```json'
+                cat results.json
+                echo '```'
+              } > incident.md
+              url=$(gh issue create --repo "$GITHUB_REPOSITORY" --label uptime-incident --title 'Fresh Mart availability incident' --body-file incident.md)
+              message="🚨 HIGH: Fresh Mart website availability incident confirmed externally after 3 probes. Incident: $url"
+              curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" --data-urlencode "text=${message}" >/dev/null
+            fi
+            exit 1
+          fi
+          if [ -n "$issue" ]; then
+            gh issue close "$issue" --repo "$GITHUB_REPOSITORY" --comment 'External probes have recovered.' >/dev/null
+            message="✅ RESOLVED: Fresh Mart external storefront, shop health API and admin entry are reachable again."
+            curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" --data-urlencode "text=${message}" >/dev/null
+          fi
