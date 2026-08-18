@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import json, time, urllib.error, urllib.request
 
-CHECKS = [
-    {"name":"Main storefront","url":"https://freshmart.com.ng/","content_type":"text/html","contains":"Fresh Mart"},
-    {"name":"Shop health API","url":"https://shop.freshmart.com.ng/store/health","content_type":"application/json","contains":"\"status\":\"ok\""},
-    {"name":"Admin entry","url":"https://admin.freshmart.com.ng/admin","content_type":"text/html","contains":"Fresh Mart"},
-]
-
+import argparse
+import json
+from pathlib import Path
+import sys
+import time
+import urllib.error
+import urllib.request
 
 REQUIRED_FIELDS = ("name", "url", "content_type", "contains")
 
@@ -63,25 +63,42 @@ def run_checks(checks, attempts=3, delay_seconds=30, checker=check, sleep=time.s
     return {"healthy": all(result["ok"] for result in final), "attempts": history}
 
 
-def main() -> int:
-    attempts = []
-    for attempt in range(1, 4):
-        results = [check(spec) for spec in CHECKS]
-        attempts.append({"attempt": attempt, "results": results})
-        if all(result["ok"] for result in results):
-            break
-        if attempt < 3:
-            time.sleep(30)
-    final = attempts[-1]["results"]
-    print(
-        json.dumps(
-            {
-                "healthy": all(result["ok"] for result in final),
-                "attempts": attempts,
-            },
-            indent=2,
-        )
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Probe configured HTTP endpoints and emit a JSON health report."
     )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path(__file__).with_name("endpoints.json"),
+        help="endpoint configuration file (default: endpoints.json beside this script)",
+    )
+    parser.add_argument(
+        "--attempts",
+        type=int,
+        default=3,
+        help="maximum probe attempts (default: 3)",
+    )
+    parser.add_argument(
+        "--delay-seconds",
+        type=float,
+        default=30,
+        help="delay between failed attempts (default: 30)",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        checks = load_checks(args.config)
+        report = run_checks(
+            checks,
+            attempts=args.attempts,
+            delay_seconds=args.delay_seconds,
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        print(f"configuration error: {error}", file=sys.stderr)
+        return 2
+
+    print(json.dumps(report, indent=2))
     return 0
 
 

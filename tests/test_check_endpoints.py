@@ -279,5 +279,79 @@ class RetryTests(unittest.TestCase):
             check_endpoints.run_checks(self.checks, delay_seconds=-1)
 
 
+class CliTests(unittest.TestCase):
+    def test_main_prints_compatible_report(self):
+        report = {"healthy": True, "attempts": []}
+        output = io.StringIO()
+        with (
+            mock.patch.object(check_endpoints, "load_checks", return_value=[{"name": "Example"}]),
+            mock.patch.object(check_endpoints, "run_checks", return_value=report),
+            contextlib.redirect_stdout(output),
+        ):
+            return_code = check_endpoints.main([])
+
+        self.assertEqual(return_code, 0)
+        self.assertEqual(json.loads(output.getvalue()), report)
+
+    def test_custom_arguments_reach_runner(self):
+        checks = [{"name": "Example"}]
+        report = {"healthy": True, "attempts": []}
+        with (
+            mock.patch.object(check_endpoints, "load_checks", return_value=checks) as loader,
+            mock.patch.object(check_endpoints, "run_checks", return_value=report) as runner,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            return_code = check_endpoints.main(
+                [
+                    "--config",
+                    "/tmp/custom-endpoints.json",
+                    "--attempts",
+                    "2",
+                    "--delay-seconds",
+                    "1.5",
+                ]
+            )
+
+        self.assertEqual(return_code, 0)
+        loader.assert_called_once_with(Path("/tmp/custom-endpoints.json"))
+        runner.assert_called_once_with(checks, attempts=2, delay_seconds=1.5)
+
+    def test_configuration_error_returns_two(self):
+        output = io.StringIO()
+        errors = io.StringIO()
+        with (
+            mock.patch.object(
+                check_endpoints,
+                "load_checks",
+                side_effect=ValueError("invalid endpoints"),
+            ),
+            contextlib.redirect_stdout(output),
+            contextlib.redirect_stderr(errors),
+        ):
+            return_code = check_endpoints.main([])
+
+        self.assertEqual(return_code, 2)
+        self.assertEqual(output.getvalue(), "")
+        self.assertIn("configuration error: invalid endpoints", errors.getvalue())
+
+    def test_invalid_retry_arguments_return_two(self):
+        cases = (["--attempts", "0"], ["--delay-seconds", "-1"])
+        for arguments in cases:
+            with self.subTest(arguments=arguments):
+                errors = io.StringIO()
+                with (
+                    mock.patch.object(
+                        check_endpoints,
+                        "load_checks",
+                        return_value=[{"name": "Example"}],
+                    ),
+                    contextlib.redirect_stderr(errors),
+                ):
+                    return_code = check_endpoints.main(arguments)
+
+                self.assertEqual(return_code, 2)
+                self.assertIn("configuration error:", errors.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
