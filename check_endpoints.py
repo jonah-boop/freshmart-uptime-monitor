@@ -22,11 +22,27 @@ def check(spec):
     except Exception as e:
         return {"name":spec["name"],"url":spec["url"],"ok":False,"status":0,"detail":f"{type(e).__name__}: {e}"}
 
-attempts=[]
-for attempt in range(1,4):
-    results=[check(spec) for spec in CHECKS]
-    attempts.append({"attempt":attempt,"results":results})
-    if all(r["ok"] for r in results): break
-    if attempt<3: time.sleep(30)
-final=attempts[-1]["results"]
-print(json.dumps({"healthy":all(r["ok"] for r in final),"attempts":attempts},indent=2))
+def main() -> int:
+    attempts = []
+    for attempt in range(1, 4):
+        results = [check(spec) for spec in CHECKS]
+        attempts.append({"attempt": attempt, "results": results})
+        if all(result["ok"] for result in results):
+            break
+        if attempt < 3:
+            time.sleep(30)
+    final = attempts[-1]["results"]
+    print(
+        json.dumps(
+            {
+                "healthy": all(result["ok"] for result in final),
+                "attempts": attempts,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
