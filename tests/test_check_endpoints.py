@@ -185,7 +185,9 @@ class ProbeTests(unittest.TestCase):
                 )
 
                 self.assertFalse(result["ok"])
-                self.assertEqual(result["detail"], "status/type/content contract mismatch")
+                self.assertEqual(
+                    result["detail"], "status/type/content contract mismatch"
+                )
 
     def test_http_error_becomes_structured_failure(self):
         def opener(request, timeout):
@@ -284,7 +286,9 @@ class CliTests(unittest.TestCase):
         report = {"healthy": True, "attempts": []}
         output = io.StringIO()
         with (
-            mock.patch.object(check_endpoints, "load_checks", return_value=[{"name": "Example"}]),
+            mock.patch.object(
+                check_endpoints, "load_checks", return_value=[{"name": "Example"}]
+            ),
             mock.patch.object(check_endpoints, "run_checks", return_value=report),
             contextlib.redirect_stdout(output),
         ):
@@ -297,8 +301,12 @@ class CliTests(unittest.TestCase):
         checks = [{"name": "Example"}]
         report = {"healthy": True, "attempts": []}
         with (
-            mock.patch.object(check_endpoints, "load_checks", return_value=checks) as loader,
-            mock.patch.object(check_endpoints, "run_checks", return_value=report) as runner,
+            mock.patch.object(
+                check_endpoints, "load_checks", return_value=checks
+            ) as loader,
+            mock.patch.object(
+                check_endpoints, "run_checks", return_value=report
+            ) as runner,
             contextlib.redirect_stdout(io.StringIO()),
         ):
             return_code = check_endpoints.main(
