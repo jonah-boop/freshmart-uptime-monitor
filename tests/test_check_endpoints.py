@@ -214,5 +214,70 @@ class ProbeTests(unittest.TestCase):
         self.assertEqual(result["detail"], "TimeoutError: timed out")
 
 
+class RetryTests(unittest.TestCase):
+    checks = [{"name": "Example"}]
+
+    def test_stops_after_first_healthy_attempt(self):
+        checker_calls = []
+        sleep_calls = []
+
+        def checker(spec):
+            checker_calls.append(spec)
+            return {"ok": True}
+
+        result = check_endpoints.run_checks(
+            self.checks,
+            checker=checker,
+            sleep=sleep_calls.append,
+        )
+
+        self.assertTrue(result["healthy"])
+        self.assertEqual(len(result["attempts"]), 1)
+        self.assertEqual(checker_calls, self.checks)
+        self.assertEqual(sleep_calls, [])
+
+    def test_retries_until_recovery(self):
+        outcomes = iter([False, True])
+        sleep_calls = []
+
+        def checker(spec):
+            return {"ok": next(outcomes)}
+
+        result = check_endpoints.run_checks(
+            self.checks,
+            attempts=3,
+            delay_seconds=7,
+            checker=checker,
+            sleep=sleep_calls.append,
+        )
+
+        self.assertTrue(result["healthy"])
+        self.assertEqual(len(result["attempts"]), 2)
+        self.assertEqual(sleep_calls, [7])
+
+    def test_reports_unhealthy_after_exhaustion(self):
+        sleep_calls = []
+
+        result = check_endpoints.run_checks(
+            self.checks,
+            attempts=3,
+            delay_seconds=2,
+            checker=lambda spec: {"ok": False},
+            sleep=sleep_calls.append,
+        )
+
+        self.assertFalse(result["healthy"])
+        self.assertEqual(len(result["attempts"]), 3)
+        self.assertEqual(sleep_calls, [2, 2])
+
+    def test_rejects_attempts_below_one(self):
+        with self.assertRaisesRegex(ValueError, "attempts must be at least 1"):
+            check_endpoints.run_checks(self.checks, attempts=0)
+
+    def test_rejects_negative_delay(self):
+        with self.assertRaisesRegex(ValueError, "delay_seconds must be non-negative"):
+            check_endpoints.run_checks(self.checks, delay_seconds=-1)
+
+
 if __name__ == "__main__":
     unittest.main()

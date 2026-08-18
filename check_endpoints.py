@@ -45,6 +45,24 @@ def check(spec, opener=urllib.request.urlopen):
     except Exception as e:
         return {"name":spec["name"],"url":spec["url"],"ok":False,"status":0,"detail":f"{type(e).__name__}: {e}"}
 
+
+def run_checks(checks, attempts=3, delay_seconds=30, checker=check, sleep=time.sleep):
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
+    if delay_seconds < 0:
+        raise ValueError("delay_seconds must be non-negative")
+    history = []
+    for attempt in range(1, attempts + 1):
+        results = [checker(spec) for spec in checks]
+        history.append({"attempt": attempt, "results": results})
+        if all(result["ok"] for result in results):
+            break
+        if attempt < attempts:
+            sleep(delay_seconds)
+    final = history[-1]["results"]
+    return {"healthy": all(result["ok"] for result in final), "attempts": history}
+
+
 def main() -> int:
     attempts = []
     for attempt in range(1, 4):
