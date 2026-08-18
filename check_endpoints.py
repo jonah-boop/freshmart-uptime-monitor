@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 import sys
 import time
@@ -74,11 +75,17 @@ def check(spec, opener=urllib.request.urlopen):
         }
 
 
-def run_checks(checks, attempts=3, delay_seconds=30, checker=check, sleep=time.sleep):
+def run_checks(
+    checks,
+    attempts: int = 3,
+    delay_seconds: float = 30,
+    checker=check,
+    sleep=time.sleep,
+):
     if attempts < 1:
         raise ValueError("attempts must be at least 1")
-    if delay_seconds < 0:
-        raise ValueError("delay_seconds must be non-negative")
+    if not math.isfinite(delay_seconds) or delay_seconds < 0:
+        raise ValueError("delay_seconds must be non-negative and finite")
     history = []
     for attempt in range(1, attempts + 1):
         results = [checker(spec) for spec in checks]

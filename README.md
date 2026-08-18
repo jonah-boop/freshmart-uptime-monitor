@@ -9,7 +9,7 @@ Fresh Mart uses it to check public services independently of its VPS. The code i
 1. GitHub Actions starts the monitor every five minutes.
 2. `check_endpoints.py` loads and validates `endpoints.json`.
 3. Each endpoint must return HTTP 200, the configured content type, and the configured body marker.
-4. A failed run retries three times with 30 seconds between attempts.
+4. A failed run makes up to three attempts, waiting 30 seconds between attempts.
 5. A confirmed failure opens one `uptime-incident` GitHub issue and sends one Telegram alert.
 6. A later healthy run closes the issue and sends one recovery message.
 
@@ -41,11 +41,11 @@ The monitor uses only the Python standard library.
 | Field | Purpose |
 | --- | --- |
 | `name` | Human-readable service name |
-| `url` | Public HTTPS endpoint to probe |
+| `url` | Endpoint URL to probe; use public HTTPS in shared workflow repositories |
 | `content_type` | Exact media type expected from the response |
 | `contains` | Text marker that must appear in the first 200,000 response bytes |
 
-Keep credentials, signed URLs, and private network addresses out of this public file.
+Keep credentials, signed URLs, and private network addresses out of this public file. Configuration validation checks the JSON shape and required strings; it does not enforce the URL scheme or destination. Treat `endpoints.json` as trusted workflow configuration and review every URL change before merge.
 
 ## Run locally
 
@@ -110,7 +110,7 @@ Run **Test external Telegram delivery** manually after adding the secrets. The n
 
 ## Security boundary
 
-This repository contains no runtime credentials. GitHub Actions secrets hold notification credentials, and the monitor probes only public endpoints listed in `endpoints.json`. Review every endpoint change before merge because workflows will contact those URLs from GitHub-hosted runners.
+This repository contains no runtime credentials. GitHub Actions secrets hold notification credentials. The monitor will contact any URL listed in the trusted `endpoints.json` configuration, so repository review—not runtime URL filtering—enforces the intended public-HTTPS boundary. Review every endpoint change before merge because GitHub-hosted runners will contact those URLs.
 
 ## License
 

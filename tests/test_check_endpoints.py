@@ -280,6 +280,18 @@ class RetryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "delay_seconds must be non-negative"):
             check_endpoints.run_checks(self.checks, delay_seconds=-1)
 
+    def test_rejects_non_finite_delay(self):
+        for delay in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(delay=delay):
+                with self.assertRaisesRegex(ValueError, "non-negative and finite"):
+                    check_endpoints.run_checks(
+                        self.checks,
+                        attempts=2,
+                        delay_seconds=delay,
+                        checker=lambda spec: {"ok": False},
+                        sleep=lambda seconds: None,
+                    )
+
 
 class CliTests(unittest.TestCase):
     def test_main_prints_compatible_report(self):
