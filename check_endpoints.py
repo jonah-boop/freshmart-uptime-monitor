@@ -32,10 +32,10 @@ def load_checks(path):
     return checks
 
 
-def check(spec):
+def check(spec, opener=urllib.request.urlopen):
     try:
         req=urllib.request.Request(spec["url"],headers={"User-Agent":"FreshMart-External-Uptime/1.0","Accept":"*/*"})
-        with urllib.request.urlopen(req,timeout=20) as r:
+        with opener(req,timeout=20) as r:
             body=r.read(200000).decode("utf-8",errors="replace")
             ctype=r.headers.get_content_type()
             ok=r.status==200 and ctype==spec["content_type"] and spec["contains"] in body

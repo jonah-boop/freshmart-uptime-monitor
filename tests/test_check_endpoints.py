@@ -1,4 +1,5 @@
 import contextlib
+from email.message import Message
 import importlib
 import io
 import json
@@ -123,6 +124,94 @@ class ConfigurationTests(unittest.TestCase):
 
             with self.assertRaises(json.JSONDecodeError):
                 check_endpoints.load_checks(path)
+
+
+class FakeHeaders:
+    def __init__(self, content_type):
+        self.content_type = content_type
+
+    def get_content_type(self):
+        return self.content_type
+
+
+class FakeResponse:
+    def __init__(self, *, status=200, content_type="text/html", body=b"Example"):
+        self.status = status
+        self.headers = FakeHeaders(content_type)
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
+
+    def read(self, limit):
+        return self.body[:limit]
+
+
+class ProbeTests(unittest.TestCase):
+    spec = {
+        "name": "Example",
+        "url": "https://example.com/health",
+        "content_type": "text/html",
+        "contains": "Example",
+    }
+
+    def test_expected_contract_is_healthy(self):
+        calls = []
+
+        def opener(request, timeout):
+            calls.append((request.full_url, timeout))
+            return FakeResponse()
+
+        result = check_endpoints.check(self.spec, opener=opener)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], 200)
+        self.assertEqual(result["detail"], "expected marker present")
+        self.assertEqual(calls, [("https://example.com/health", 20)])
+
+    def test_contract_mismatch_is_unhealthy(self):
+        cases = {
+            "status": FakeResponse(status=503),
+            "content type": FakeResponse(content_type="application/json"),
+            "marker": FakeResponse(body=b"Unexpected"),
+        }
+        for label, response in cases.items():
+            with self.subTest(label=label):
+                result = check_endpoints.check(
+                    self.spec, opener=lambda request, timeout: response
+                )
+
+                self.assertFalse(result["ok"])
+                self.assertEqual(result["detail"], "status/type/content contract mismatch")
+
+    def test_http_error_becomes_structured_failure(self):
+        def opener(request, timeout):
+            raise check_endpoints.urllib.error.HTTPError(
+                request.full_url,
+                503,
+                "Service Unavailable",
+                Message(),
+                None,
+            )
+
+        result = check_endpoints.check(self.spec, opener=opener)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], 503)
+        self.assertEqual(result["detail"], "HTTP 503")
+
+    def test_transport_error_becomes_structured_failure(self):
+        def opener(request, timeout):
+            raise TimeoutError("timed out")
+
+        result = check_endpoints.check(self.spec, opener=opener)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], 0)
+        self.assertEqual(result["detail"], "TimeoutError: timed out")
 
 
 if __name__ == "__main__":
