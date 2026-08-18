@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Main storefront",
+    "url": "https://freshmart.com.ng/",
+    "content_type": "text/html",
+    "contains": "Fresh Mart"
+  },
+  {
+    "name": "Shop health API",
+    "url": "https://shop.freshmart.com.ng/store/health",
+    "content_type": "application/json",
+    "contains": "\"status\":\"ok\""
+  },
+  {
+    "name": "Admin entry",
+    "url": "https://admin.freshmart.com.ng/admin",
+    "content_type": "text/html",
+    "contains": "Fresh Mart"
+  }
+]

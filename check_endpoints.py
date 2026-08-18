@@ -9,6 +9,29 @@ CHECKS = [
 ]
 
 
+REQUIRED_FIELDS = ("name", "url", "content_type", "contains")
+
+
+def load_checks(path):
+    with open(path, encoding="utf-8") as config_file:
+        checks = json.load(config_file)
+    if not isinstance(checks, list) or not checks:
+        raise ValueError("configuration must be a non-empty JSON list")
+    for index, spec in enumerate(checks):
+        if not isinstance(spec, dict):
+            raise ValueError(f"endpoint {index} must be an object")
+        for field in REQUIRED_FIELDS:
+            if (
+                field not in spec
+                or not isinstance(spec[field], str)
+                or not spec[field].strip()
+            ):
+                raise ValueError(
+                    f"endpoint {index} field {field!r} must be a non-empty string"
+                )
+    return checks
+
+
 def check(spec):
     try:
         req=urllib.request.Request(spec["url"],headers={"User-Agent":"FreshMart-External-Uptime/1.0","Accept":"*/*"})
